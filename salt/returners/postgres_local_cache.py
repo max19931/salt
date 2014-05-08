@@ -1,20 +1,21 @@
 # -*- coding: utf-8 -*-
 '''
-Return data to a postgresql server
+Use a postgresql server for the master job cache. This helps the job cache to
+cope with scale.
 
-:maintainer:    None
+:maintainer:    gjredelinghuys@gmail.com
 :maturity:      New
 :depends:       psycopg2
 :platform:      all
 
 To enable this returner the minion will need the psycopg2 installed and
-the following values configured in the minion or master config::
+the following values configured in the master config::
 
-    returner.postgres.host: 'salt'
-    returner.postgres.user: 'salt'
-    returner.postgres.passwd: 'salt'
-    returner.postgres.db: 'salt'
-    returner.postgres.port: 5432
+    master_job_cache.postgres.host: 'salt'
+    master_job_cache.postgres.user: 'salt'
+    master_job_cache.postgres.passwd: 'salt'
+    master_job_cache.postgres.db: 'salt'
+    master_job_cache.postgres.port: 5432
 
 Running the following commands as the postgres user should create the database
 correctly::
@@ -85,7 +86,7 @@ except ImportError:
 def __virtual__():
     if not HAS_POSTGRES:
         return False
-    return 'postgres'
+    return 'postgres_local_cache'
 
 
 def _get_conn():
