@@ -65,6 +65,13 @@ Required python modules: psycopg2
 
 # Import python libs
 import json
+import logging
+import re
+
+# Import salt libs
+import salt.utils
+
+log = logging.getLogger(__name__)
 
 # Import third party libs
 try:
@@ -85,18 +92,32 @@ def _get_conn():
     '''
     Return a postgres connection.
     '''
-    return psycopg2.connect(
-            host=__salt__['config.option']('returner.postgres.host'),
-            user=__salt__['config.option']('returner.postgres.user'),
-            password=__salt__['config.option']('returner.postgres.passwd'),
-            database=__salt__['config.option']('returner.postgres.db'),
-            port=__salt__['config.option']('returner.postgres.port'))
+    conn = psycopg2.connect(
+            host=__opts__['master_job_cache.postgres.host'],
+            user=__opts__['master_job_cache.postgres.user'],
+            password=__opts__['master_job_cache.postgres.passwd'],
+            database=__opts__['master_job_cache.postgres.db'],
+            port=__opts__['master_job_cache.postgres.port'])
+    return conn
 
 
 def _close_conn(conn):
     conn.commit()
     conn.close()
 
+def _format_job_instance(job):
+    return {'Function': job.get('fun', 'unknown-function'),
+            'Arguments': list(job.get('arg', [])),
+            # unlikely but safeguard from invalid returns
+            'Target': job.get('tgt', 'unknown-target'),
+            'Target-type': job.get('tgt_type', []),
+            'User': job.get('user', 'root')}
+
+
+def _format_jid_instance(jid, job):
+    ret = _format_job_instance(job)
+    ret.update({'StartTime': salt.utils.jid_to_time(jid)})
+    return ret
 
 def returner(ret):
     '''
@@ -123,6 +144,7 @@ def save_load(jid, load):
     '''
     Save the load to the specified jid id
     '''
+    jid = _escape_jid(jid)
     conn = _get_conn()
     cur = conn.cursor()
     sql = '''INSERT INTO jids (jid, load) VALUES (%s, %s)'''
@@ -130,19 +152,23 @@ def save_load(jid, load):
     cur.execute(sql, (jid, json.dumps(load)))
     _close_conn(conn)
 
+def _escape_jid(jid):
+    jid = "%s" % jid
+    jid = re.sub(r"'*", "", jid)
+    return jid
 
 def get_load(jid):
     '''
     Return the load data that marks a specified jid
     '''
+    jid = _escape_jid(jid)
     conn = _get_conn()
     cur = conn.cursor()
-    sql = '''SELECT load FROM jids WHERE jid = %s;'''
-
+    sql = '''SELECT load FROM jids WHERE jid = %s'''
     cur.execute(sql, (jid,))
     data = cur.fetchone()
     if data:
-        return json.loads(data)
+        return json.loads(data[0])
     _close_conn(conn)
     return {}
 
@@ -151,6 +177,7 @@ def get_jid(jid):
     '''
     Return the information returned when the specified job id was executed
     '''
+    jid = _escape_jid(jid)
     conn = _get_conn()
     cur = conn.cursor()
     sql = '''SELECT id, return FROM salt_returns WHERE jid = %s'''
@@ -160,64 +187,58 @@ def get_jid(jid):
     ret = {}
     if data:
         for minion, full_ret in data:
-            ret[minion] = json.loads(full_ret)
+            ret[minion] = {}
+            ret[minion]['return'] = json.loads(full_ret)
     _close_conn(conn)
     return ret
 
+def _gen_jid(cur):
+    jid = salt.utils.gen_jid()
+    sql = '''SELECT jid FROM jids WHERE jid = %s'''
+    cur.execute(sql, (jid,))
+    data = cur.fetchall()
+    if not data:
+        return jid
+    return None
 
-def get_fun(fun):
+def prep_jid(nocache=False):
     '''
-    Return a dict of the last function called for all minions
+    Return a job id and prepare the job id directory
+    This is the function responsible for making sure jids don't collide (unless its passed a jid)
+    So do what you have to do to make sure that stays the case
     '''
     conn = _get_conn()
     cur = conn.cursor()
-    sql = '''SELECT s.id,s.jid, s.return
-            FROM salt_returns s
-            JOIN ( SELECT MAX(jid) AS jid FROM salt_returns GROUP BY fun, id) max
-            ON s.jid = max.jid
-            WHERE s.fun = %s
-            '''
+    jid = _gen_jid(cur)
+    while not jid:
+      log.info("jid clash, generating a new one")
+      jid = _gen_jid(cur)
 
-    cur.execute(sql, (fun,))
-    data = cur.fetchall()
-
-    ret = {}
-    if data:
-        for minion, jid, full_ret in data:
-            ret[minion] = json.loads(full_ret)
-    _close_conn(conn)
-    return ret
-
+    cur.close()
+    conn.close()
+    return jid
 
 def get_jids():
     '''
     Return a list of all job ids
+    For master job cache this also formats the output and returns a string
     '''
     conn = _get_conn()
     cur = conn.cursor()
-    sql = '''SELECT jid FROM jids'''
+    sql = '''SELECT jid, load FROM jids'''
 
     cur.execute(sql)
-    data = cur.fetchall()
-    ret = []
-    for jid in data:
-        ret.append(jid[0])
-    _close_conn(conn)
+    ret = {}
+    data = cur.fetchone()
+    while data:
+        ret[data[0]] = _format_jid_instance(data[0], json.loads(data[1]))
+        data = cur.fetchone()
+    cur.close()
+    conn.close()
     return ret
 
-
-def get_minions():
+def clean_old_jobs():
     '''
-    Return a list of minions
+    Clean out the old jobs from the job cache
     '''
-    conn = _get_conn()
-    cur = conn.cursor()
-    sql = '''SELECT DISTINCT id FROM salt_returns'''
-
-    cur.execute(sql)
-    data = cur.fetchall()
-    ret = []
-    for minion in data:
-        ret.append(minion[0])
-    _close_conn(conn)
-    return ret
+    return
