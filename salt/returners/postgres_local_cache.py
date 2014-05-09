@@ -11,6 +11,7 @@ cope with scale.
 To enable this returner the minion will need the psycopg2 installed and
 the following values configured in the master config::
 
+    master_job_cache: postgres_local_cache
     master_job_cache.postgres.host: 'salt'
     master_job_cache.postgres.user: 'salt'
     master_job_cache.postgres.passwd: 'salt'
@@ -33,7 +34,15 @@ correctly::
     DROP TABLE IF EXISTS jids;
     CREATE TABLE jids (
       jid   varchar(20) PRIMARY KEY,
-      load  text NOT NULL
+      started TIMESTAMP WITH TIME ZONE DEFAULT now(),
+      tgt_type text NOT NULL,
+      cmd text NOT NULL,
+      tgt text NOT NULL,
+      kwargs text NOT NULL,
+      ret text NOT NULL,
+      username text NOT NULL,
+      arg text NOT NULL,
+      fun text NOT NULL
     );
 
     --
@@ -148,15 +157,40 @@ def save_load(jid, load):
     jid = _escape_jid(jid)
     conn = _get_conn()
     cur = conn.cursor()
-    sql = '''INSERT INTO jids (jid, load) VALUES (%s, %s)'''
+    sql = '''INSERT INTO jids (jid, started, tgt_type, cmd, tgt, kwargs, ret, username, arg, fun) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
 
-    cur.execute(sql, (jid, json.dumps(load)))
+    cur.execute(sql, (
+                      jid,
+                      salt.utils.jid_to_time(jid),
+                      str(load.get("tgt_type")),
+                      str(load.get("cmd")),
+                      str(load.get("tgt")),
+                      str(load.get("kwargs")),
+                      str(load.get("ret")),
+                      str(load.get("user")),
+                      str(load.get("arg")),
+                      str(load.get("fun")),
+                )
+    )
     _close_conn(conn)
 
 def _escape_jid(jid):
     jid = "%s" % jid
     jid = re.sub(r"'*", "", jid)
     return jid
+
+def _build_dict(data):
+    result = {}
+    result["jid"] = data[0]
+    result["tgt_type"] = data[1]
+    result["cmd"] = data[2]
+    result["tgt"] = data[3]
+    result["kwargs"] = data[4]
+    result["ret"] = data[5]
+    result["user"] = data[6]
+    result["arg"] = data[7]
+    result["fun"] = data[8]
+    return result
 
 def get_load(jid):
     '''
@@ -165,11 +199,11 @@ def get_load(jid):
     jid = _escape_jid(jid)
     conn = _get_conn()
     cur = conn.cursor()
-    sql = '''SELECT load FROM jids WHERE jid = %s'''
+    sql = '''SELECT jid, tgt_type, cmd, tgt, kwargs, ret, username, arg, fun FROM jids WHERE jid = %s'''
     cur.execute(sql, (jid,))
     data = cur.fetchone()
     if data:
-        return json.loads(data[0])
+        return _build_dict(data)
     _close_conn(conn)
     return {}
 
@@ -226,13 +260,16 @@ def get_jids():
     '''
     conn = _get_conn()
     cur = conn.cursor()
-    sql = '''SELECT jid, load FROM jids'''
+    sql = '''SELECT jid, tgt_type, cmd, tgt, kwargs, ret, username, arg, fun FROM jids'''
+    if __opts__['keep_jobs'] != 0:
+        sql = sql + " WHERE started > NOW() - INTERVAL '" + str(__opts__['keep_jobs']) + "' HOUR"
 
     cur.execute(sql)
     ret = {}
     data = cur.fetchone()
     while data:
-        ret[data[0]] = _format_jid_instance(data[0], json.loads(data[1]))
+        data_dict = _build_dict(data)
+        ret[data_dict["jid"]] = _format_jid_instance(data_dict["jid"], data_dict)
         data = cur.fetchone()
     cur.close()
     conn.close()
