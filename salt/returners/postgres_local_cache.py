@@ -117,7 +117,7 @@ def _close_conn(conn):
 
 def _format_job_instance(job):
     return {'Function': job.get('fun', 'unknown-function'),
-            'Arguments': list(job.get('arg', [])),
+            'Arguments': json.loads(job.get('arg', '[]')),
             # unlikely but safeguard from invalid returns
             'Target': job.get('tgt', 'unknown-target'),
             'Target-type': job.get('tgt_type', []),
@@ -168,7 +168,7 @@ def save_load(jid, load):
                       str(load.get("kwargs")),
                       str(load.get("ret")),
                       str(load.get("user")),
-                      str(load.get("arg")),
+                      str(json.dumps(load.get("arg"))),
                       str(load.get("fun")),
                 )
     )
