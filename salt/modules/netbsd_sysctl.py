@@ -19,7 +19,7 @@ def __virtual__():
     return __virtualname__ if __grains__['os'] == 'NetBSD' else False
 
 
-def show():
+def show(config_file=False):
     '''
     Return a list of sysctl parameters for this minion
 
@@ -95,7 +95,7 @@ def assign(name, value):
     return ret
 
 
-def persist(name, value):
+def persist(name, value, config='/etc/sysctl.conf'):
     '''
     Assign and persist a simple sysctl parameter for this minion
 
@@ -108,7 +108,6 @@ def persist(name, value):
     nlines = []
     edited = False
     value = str(value)
-    config = '/etc/sysctl.conf'
 
     with salt.utils.fopen(config, 'r') as ifile:
         for line in ifile:
