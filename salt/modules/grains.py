@@ -6,6 +6,7 @@ Return/control aspects of the grains data
 # Import python libs
 from __future__ import print_function
 import collections
+import copy
 import math
 import operator
 import os
@@ -346,7 +347,7 @@ def ls():  # pylint: disable=C0103
     return sorted(__grains__)
 
 
-def filter_by(lookup_dict, grain='os_family', merge=None, default='default'):
+def filter_by(lookup_dict, grain='os_family', merge=None, default='default', base=None):
     '''
     .. versionadded:: 0.17.0
 
@@ -400,14 +401,20 @@ def filter_by(lookup_dict, grain='os_family', merge=None, default='default'):
         grains. For example, the value of the "os_family" grain for the current
         system could be used to pull values from the ``lookup_dict``
         dictionary.
-    :param merge: A dictionary to merge with the ``lookup_dict`` before doing
-        the lookup. This allows Pillar to override the values in the
+    :param merge: A dictionary to merge with the results of the grain selection
+        from ``lookup_dict``. This allows Pillar to override the values in the
         ``lookup_dict``. This could be useful, for example, to override the
         values for non-standard package names such as when using a different
         Python version from the default Python version provided by the OS
         (e.g., ``python26-mysql`` instead of ``python-mysql``).
     :param default: default lookup_dict's key used if the grain does not exists
-         or if the grain value has no match on lookup_dict.
+        or if the grain value has no match on lookup_dict.  If unspecified
+        the value is "default".
+    :param base: A lookup_dict key to use for a base dictionary.  The
+        grain-selected ``lookup_dict`` is merged over this and then finally
+        the ``merge`` dictionary is merged.  This allows common values for
+        each case to be collected in the base and overridden by the grain
+        selection dictionary and the merge dictionary.  Default is unset.
 
          .. versionadded:: 2014.1.0
 
@@ -418,7 +425,11 @@ def filter_by(lookup_dict, grain='os_family', merge=None, default='default'):
         salt '*' grains.filter_by '{Debian: Debheads rule, RedHat: I love my hat}'
         # this one will render {D: {E: I, G: H}, J: K}
         salt '*' grains.filter_by '{A: B, C: {D: {E: F,G: H}}}' 'xxx' '{D: {E: I},J: K}' 'C'
+        # next one renders {A: {B: G}, D: J}
+        salt '*' grains.filter_by '{default: {A: {B: C}, D: E}, F: {A: {B: G}}, H: {D: I}}' 'xxx' '{D: J}' 'F' 'default'
+        # next same as above when default='H' instead of 'F' renders {A: {B: C}, D: J}
     '''
+
     ret = lookup_dict.get(
             __grains__.get(
                 grain, default),
@@ -426,17 +437,24 @@ def filter_by(lookup_dict, grain='os_family', merge=None, default='default'):
                 default, None)
             )
 
+    if base and base in lookup_dict:
+        base_values = lookup_dict[base]
+        if ret is None:
+            ret = base_values
+
+        elif isinstance(base_values, collections.Mapping):
+            if not isinstance(ret, collections.Mapping):
+                raise SaltException('filter_by default and look-up values must both be dictionaries.')
+            ret = salt.utils.dictupdate.update(copy.deepcopy(base_values), ret)
+
     if merge:
         if not isinstance(merge, collections.Mapping):
             raise SaltException('filter_by merge argument must be a dictionary.')
 
+        if ret is None:
+            ret = merge
         else:
-
-            if ret is None:
-                ret = merge
-
-            else:
-                salt.utils.dictupdate.update(ret, merge)
+            salt.utils.dictupdate.update(ret, merge)
 
     return ret
 
