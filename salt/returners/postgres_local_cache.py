@@ -204,7 +204,7 @@ def returner(load):
         sql, (
             load['fun'],
             load['jid'],
-            json.dumps(load['return']),
+            json.dumps(unicode(str(load['return']), 'utf-8', 'replace')),
             load['id'],
             load['success']
         )
