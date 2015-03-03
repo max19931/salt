@@ -193,6 +193,12 @@ def returner(load):
     '''
     Return data to a postgres server
     '''
+    # salt guarantees that there will be 'fun', 'jid', 'return' and 'id' but not
+    # 'success'
+    success = 'Unknown'
+    if 'success' in load:
+        success = load['success']
+
     conn = _get_conn()
     if conn is None:
         return None
@@ -206,7 +212,7 @@ def returner(load):
             load['jid'],
             json.dumps(unicode(str(load['return']), 'utf-8', 'replace')),
             load['id'],
-            load['success']
+            success
         )
     )
     _close_conn(conn)
