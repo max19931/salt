@@ -22,12 +22,15 @@ from __future__ import absolute_import
 import logging
 log = logging.getLogger(__file__)
 
+# import NAPALM utils
+import salt.utils.napalm
+from salt.utils.napalm import proxy_napalm_wrap
 
 try:
     # will try to import NAPALM
     # https://github.com/napalm-automation/napalm
     # pylint: disable=W0611
-    from napalm_base import get_network_driver
+    import napalm_base
     # pylint: enable=W0611
     HAS_NAPALM = True
 except ImportError:
@@ -50,10 +53,9 @@ def __virtual__():
 
     '''
     NAPALM library must be installed for this module to work.
-    Also, the key proxymodule must be set in the __opts___ dictionary.
     '''
 
-    if HAS_NAPALM and 'proxy' in __opts__:
+    if HAS_NAPALM:
         return __virtualname__
     else:
         return (False, 'The module napalm_route cannot be loaded: \
@@ -68,7 +70,8 @@ def __virtual__():
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def show(destination, protocol):
+@proxy_napalm_wrap
+def show(destination, protocol, **kwargs):
 
     '''
     Displays all details for a certain route learned via a specific protocol.
@@ -144,7 +147,8 @@ def show(destination, protocol):
         }
     '''
 
-    return __proxy__['napalm.call'](
+    return salt.utils.napalm.call(
+        napalm_device,
         'get_route_to',
         **{
             'destination': destination,
