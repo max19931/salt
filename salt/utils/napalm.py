@@ -54,6 +54,7 @@ def is_minion(opts):
 def is_alive(napalm_device):
     '''
     Return the connection status.
+    :param: network_device object
     '''
     is_alive_ret = call(napalm_device, 'is_alive')
     if not is_alive_ret.get('result', False):
