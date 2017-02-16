@@ -53,8 +53,6 @@ def __virtual__():
 def alive(**kwargs):  # pylint: disable=unused-argument
     '''
     Returns the alive status of the connection layer.
-    The output is a dictionary under the usual dictionary
-    output of the NAPALM modules.
 
     CLI Example:
 
@@ -66,16 +64,9 @@ def alive(**kwargs):  # pylint: disable=unused-argument
 
     .. code-block:: yaml
 
-        result: True
-        out:
-            is_alive: False
-        comment: ''
+        True
     '''
-    return salt.utils.napalm.call(
-        napalm_device,  # pylint: disable=undefined-variable
-        'is_alive',
-        **{}
-    )
+    return salt.utils.napalm.is_alive(napalm_device)  # pylint: disable=undefined-variable
 
 
 @proxy_napalm_wrap
@@ -107,12 +98,7 @@ def reconnect(force=False, **kwargs):  # pylint: disable=unused-argument
         # otherwise, the user would not be able to execute this command
         return default_ret
     is_alive = alive()
-    log.debug('Is alive fetch:')
-    log.debug(is_alive)
-    if not is_alive.get('result', False) or\
-       not is_alive.get('out', False) or\
-       not is_alive.get('out', {}).get('is_alive', False) or\
-       force:  # even if alive, but the user wants to force a restart
+    if is_alive or force:  # even if alive, but the user wants to force a restart
         proxyid = __opts__.get('proxyid') or __opts__.get('id')
         # close the connection
         log.info('Closing the NAPALM proxy connection with {proxyid}'.format(proxyid=proxyid))
