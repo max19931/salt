@@ -51,6 +51,30 @@ def is_minion(opts):
     return not salt.utils.is_proxy() and 'napalm' in opts
 
 
+def is_alive(napalm_device):
+    '''
+    Return the connection status.
+    '''
+    is_alive_ret = call(napalm_device, 'is_alive')
+    if not is_alive_ret.get('result', False):
+        log.debug('[{minionid}] Unable to execute `is_alive`: {comment}'.format(
+            minionid=opts.get('id'),
+            comment=is_alive_ret.get('comment')
+        ))
+        # if `is_alive` is not implemented by the underneath driver,
+        # will consider the connection to be still alive
+        # we don't want overly request connection reestablishment
+        # NOTE: revisit this if IOS is still not stable
+        #       and return False to force reconnection
+        return True
+    flag = is_alive_ret.get('out', {}).get('is_alive', False)
+    log.debug('Is {minionid} still alive? {answ}'.format(
+        minionid=opts.get('id'),
+        answ='Yes.' if flag else 'No.'
+    ))
+    return flag
+
+
 def virtual(opts, virtualname, filename):
     '''
     Returns the __virtual__.
