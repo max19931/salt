@@ -2266,7 +2266,7 @@ class Minion(MinionBase):
                                  '{0}_match'.format(load['tgt_type']), None)
             if match_func is None:
                 return False
-            if load['tgt_type'] in ('grain', 'grain_pcre', 'pillar'):
+            if load['tgt_type'] in ('grain', 'grain_pcre', 'pillar', 'opts', 'opts_pcre'):
                 delimiter = load.get('delimiter', DEFAULT_TARGET_DELIM)
                 if not match_func(load['tgt'], delimiter=delimiter):
                     return False
@@ -2935,10 +2935,38 @@ class Matcher(object):
                 return False
         return False
 
+    def opts_match(self, tgt, delimiter=DEFAULT_TARGET_DELIM):
+        '''
+        Globbing matcher based on minion opts.
+        '''
+        log.debug('Opts target: {0}'.format(tgt))
+        if delimiter not in tgt:
+            log.error('Got insufficient arguments for opts match '
+                      'statement from master')
+            return False
+        return salt.utils.subdict_match(
+            self.opts, tgt, delimiter=delimiter
+        )
+
+    def opts_pcre_match(self, tgt, delimiter=DEFAULT_TARGET_DELIM):
+        '''
+        PCRE matched based on minion opts.
+        '''
+        log.debug('Opts PCRE target: {0}'.format(tgt))
+        if delimiter not in tgt:
+            log.error('Got insufficient arguments for opts PCRE match '
+                      'statement from master')
+            return False
+        return salt.utils.subdict_match(
+            self.opts, tgt, delimiter=delimiter, regex_match=True
+        )
+
     def compound_match(self, tgt):
         '''
         Runs the compound target check
         '''
+        log.warning('mata')
+        log.warning(tgt)
         if not isinstance(tgt, six.string_types) and not isinstance(tgt, (list, tuple)):
             log.error('Compound target received that is neither string, list nor tuple')
             return False
@@ -2950,7 +2978,9 @@ class Matcher(object):
                'L': 'list',
                'N': None,      # Nodegroups should already be expanded
                'S': 'ipcidr',
-               'E': 'pcre'}
+               'E': 'pcre',
+               'O': 'opts',
+               'Q': 'opts_pcre'}
         if HAS_RANGE:
             ref['R'] = 'range'
 

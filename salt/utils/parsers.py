@@ -1098,6 +1098,18 @@ class TargetOptionsMixIn(six.with_metaclass(MixInMeta, object)):
                   'list of targets.')
         )
         group.add_option(
+            '-O', '--opts',
+            default=False,
+            action='store_true',
+            help=('Target using opts.')
+        )
+        group.add_option(
+            '-Q', '--opts-pcre',
+            default=False,
+            action='store_true',
+            help=('Target using opts PCRE.')
+        )
+        group.add_option(
             '-R', '--range',
             default=False,
             action='store_true',

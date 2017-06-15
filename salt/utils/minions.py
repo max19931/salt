@@ -38,7 +38,7 @@ log = logging.getLogger(__name__)
 TARGET_REX = re.compile(
         r'''(?x)
         (
-            (?P<engine>G|P|I|J|L|N|S|E|R)  # Possible target engines
+            (?P<engine>G|P|I|J|L|N|S|E|O|Q|R)  # Possible target engines
             (?P<delimiter>(?<=G|P|I|J).)?  # Optional delimiter for specific engines
         @)?                                # Engine+delimiter are separated by a '@'
                                            # character and are optional for the target
@@ -276,7 +276,9 @@ class CkMinions(object):
             for id_ in cminions:
                 if greedy and id_ not in minions:
                     continue
+                log.error('Mdata')
                 mdata = self.cache.fetch('minions/{0}'.format(id_), 'data')
+                log.error(mdata)
                 if mdata is None:
                     if not greedy:
                         minions.remove(id_)
@@ -322,6 +324,25 @@ class CkMinions(object):
                                          greedy,
                                          'pillar',
                                          regex_match=True)
+
+    def _check_opts_minions(self, expr, delimiter, greedy):
+        '''
+        Return the minions found by looking via opts
+        '''
+        log.error('Opts')
+        log.error(self.opts)
+        return salt.utils.subdict_match(self.opts,
+                                        expr,
+                                        delimiter=delimiter)
+
+    def _check_opts_pcre_minions(self, expr, delimiter, greedy):
+        '''
+        Return the minions found by looking via opts with PCRE
+        '''
+        return salt.utils.subdict_match(self.opts,
+                                        expr,
+                                        delimiter=delimiter,
+                                        regex_match=True)
 
     def _check_pillar_exact_minions(self, expr, delimiter, greedy):
         '''
@@ -451,6 +472,8 @@ class CkMinions(object):
                    'N': None,    # nodegroups should already be expanded
                    'S': self._check_ipcidr_minions,
                    'E': self._check_pcre_minions,
+                   'O': self._check_opts_minions,
+                   'Q': self._check_opts_pcre_minions,
                    'R': self._all_minions}
             if pillar_exact:
                 ref['I'] = self._check_pillar_exact_minions
@@ -538,7 +561,7 @@ class CkMinions(object):
                         return []
 
                     engine_args = [target_info['pattern']]
-                    if target_info['engine'] in ('G', 'P', 'I', 'J'):
+                    if target_info['engine'] in ('G', 'P', 'I', 'J', 'O', 'Q'):
                         engine_args.append(target_info['delimiter'] or ':')
                     engine_args.append(greedy)
 
@@ -641,7 +664,9 @@ class CkMinions(object):
                              'pillar_pcre',
                              'pillar_exact',
                              'compound',
-                             'compound_pillar_exact'):
+                             'compound_pillar_exact',
+                             'opts',
+                             'opts_pcre'):
                 minions = check_func(expr, delimiter, greedy)
             else:
                 minions = check_func(expr, greedy)
@@ -661,6 +686,8 @@ class CkMinions(object):
                'S': 'ipcidr',
                'E': 'pcre',
                'N': 'node',
+               'O': 'opts',
+               'Q': 'opts_pcre',
                None: 'glob'}
 
         target_info = parse_target(auth_entry)
