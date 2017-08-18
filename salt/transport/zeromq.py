@@ -55,6 +55,30 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 
+def get_uri(interface, port, source_ip=None, source_port=None):
+    '''
+    Return the ZMQ URI.
+    '''
+    if source_port or source_ip:
+        if source_port:
+            ret = 'tcp://{source_ip}:{source_port};{interface}:{port}'.format(
+                source_ip=(source_ip or '0.0.0.0'),
+                source_port=source_port,
+                interface=interface,
+                port=port)
+        else:
+            ret = 'tcp://{source_ip};{interface}:{port}'.format(
+                source_ip=source_ip,
+                interface=interface,
+                port=port)
+    else:
+        ret = 'tcp://{interface}:{port}'.format(
+            interface=interface,
+            port=port)
+    log.debug('ZMQ URI: %s', ret)
+    return ret
+
+
 class AsyncZeroMQReqChannel(salt.transport.client.ReqChannel):
     '''
     Encapsulate sending routines to ZeroMQ.
@@ -451,7 +475,11 @@ class ZeroMQReqServerChannel(salt.transport.mixins.auth.AESReqServerMixin, salt.
         salt.utils.appendproctitle('MWorkerQueue')
         self.context = zmq.Context(self.opts['worker_threads'])
         # Prepare the zeromq sockets
-        self.uri = 'tcp://{interface}:{ret_port}'.format(**self.opts)
+
+        self.uri = get_uri(self.opts['interface'],
+                           self.opts['ret_port'],
+                           source_ip=self.opts['source_ip'],
+                           source_port=self.opts['source_port'])
         self.clients = self.context.socket(zmq.ROUTER)
         if self.opts['ipv6'] is True and hasattr(zmq, 'IPV4ONLY'):
             # IPv6 sockets work for both IPv6 and IPv4 addresses
@@ -712,17 +740,10 @@ class ZeroMQPubServerChannel(salt.transport.server.PubServerChannel):
             # IPv6 sockets work for both IPv6 and IPv4 addresses
             pub_sock.setsockopt(zmq.IPV4ONLY, 0)
         pub_sock.setsockopt(zmq.BACKLOG, self.opts.get('zmq_backlog', 1000))
-        if self.opts['source_port'] or self.opts['source_ip']:
-            if self.opts['source_port']:
-                pub_uri = 'tcp://{source_ip}:{source_port};{interface}:{publish_port}'.format(
-                        source_ip=self.opts.get('source_ip', '0.0.0.0'),
-                        source_port=self.opts['source_port'],
-                        interface=self.opts['interface'],
-                        publish_port=self.opts['publish_port'])
-            else:
-                pub_uri = 'tcp://{source_ip};{interface}:{publish_port}'.format(**self.opts)
-        else:
-            pub_uri = 'tcp://{interface}:{publish_port}'.format(**self.opts)
+        pub_uri = get_uri(self.opts['interface'],
+                          self.opts['publish_port'],
+                          source_ip=self.opts['source_ip'],
+                          source_port=self.opts['source_port'])
         # Prepare minion pull socket
         pull_sock = context.socket(zmq.PULL)
 
