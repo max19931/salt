@@ -712,7 +712,17 @@ class ZeroMQPubServerChannel(salt.transport.server.PubServerChannel):
             # IPv6 sockets work for both IPv6 and IPv4 addresses
             pub_sock.setsockopt(zmq.IPV4ONLY, 0)
         pub_sock.setsockopt(zmq.BACKLOG, self.opts.get('zmq_backlog', 1000))
-        pub_uri = 'tcp://{interface}:{publish_port}'.format(**self.opts)
+        if self.opts['source_port'] or self.opts['source_ip']:
+            if self.opts['source_port']:
+                pub_uri = 'tcp://{source_ip}:{source_port};{interface}:{publish_port}'.format(
+                        source_ip=self.opts.get('source_ip', '0.0.0.0'),
+                        source_port=self.opts['source_port'],
+                        interface=self.opts['interface'],
+                        publish_port=self.opts['publish_port'])
+            else:
+                pub_uri = 'tcp://{source_ip};{interface}:{publish_port}'.format(**self.opts)
+        else:
+            pub_uri = 'tcp://{interface}:{publish_port}'.format(**self.opts)
         # Prepare minion pull socket
         pull_sock = context.socket(zmq.PULL)
 
